@@ -2,6 +2,45 @@
 
 A comprehensive Model Context Protocol (MCP) server that combines Google Custom Search and Wikipedia functionality for advanced research and information retrieval. Features 28 powerful tools and 13 cached resources for extensive search, analysis, content extraction, and research management capabilities. Includes 8 enhanced analysis tools that work without requiring additional API keys. Configured through MCP clients like Cursor, not through .env files.
 
+## Origins
+
+This project is a combined and enhanced version of:
+- [**Google-Search-MCP**](https://github.com/1999AZZAR/Google-Search-MCP) - Original Google Custom Search MCP server
+- [**wikipedia-mcp-server**](https://github.com/1999AZZAR/wikipedia-mcp-server) - Original Wikipedia MCP server
+
+The research-mcp-server builds upon these foundations, adding enhanced analysis tools, improved caching, and unified configuration while maintaining compatibility with the original MCP specifications.
+
+## Table of Contents
+
+- [Features](#features)
+  - [Enhanced Analysis Tools (8 total - No API Keys Required)](#enhanced-analysis-tools-8-total---no-api-keys-required)
+  - [Google Search Tools (10 total)](#google-search-tools-10-total)
+  - [Wikipedia Tools (10 total)](#wikipedia-tools-10-total)
+  - [Total Tools Available](#total-tools-available)
+  - [Resources (13 total)](#resources-13-total)
+- [Installation](#installation)
+- [Configuration](#configuration)
+  - [Cursor Configuration](#cursor-configuration)
+  - [Environment Variables](#environment-variables)
+  - [Google API Setup](#google-api-setup)
+- [Usage](#usage)
+  - [Local Development](#local-development)
+  - [Production Deployment](#production-deployment)
+- [Available Tools](#available-tools)
+  - [Enhanced Analysis Tools (8 total - No API Keys Required)](#enhanced-analysis-tools-8-total---no-api-keys-required-1)
+  - [Google Search Tools (10 total)](#google-search-tools-10-total-1)
+  - [Wikipedia Tools (10 total)](#wikipedia-tools-10-total-1)
+- [Architecture](#architecture)
+- [Caching](#caching)
+- [Error Handling](#error-handling)
+- [Development](#development)
+  - [Testing](#testing)
+  - [Linting](#linting)
+  - [Building](#building)
+- [License](#license)
+- [Contributing](#contributing)
+- [Support](#support)
+
 ## Features
 
 ### Enhanced Analysis Tools (8 total - No API Keys Required)
