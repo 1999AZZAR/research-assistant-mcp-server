@@ -5,6 +5,8 @@
 
 A Model Context Protocol (MCP) server that combines Google Custom Search and Wikipedia functionality for research and information retrieval. The server provides 28 tools, 23 resources, and 22 research prompts for search, analysis, content extraction, and research management.
 
+![Blotcat operating a crane pulling Google Search and Wikipedia blocks into a Research MCP funnel](assets/blotcat-hero.jpg)
+
 ## Features
 
 - 28 tools: Google Search (10), Wikipedia (10), and enhanced analysis (8)
@@ -91,6 +93,8 @@ The research-mcp-server builds upon these foundations, adding enhanced analysis 
 ## Features
 
 ### Enhanced Analysis Tools (8 tools - No API Keys Required)
+
+![Blotcat dissecting a raw data fish into sentiment, keywords, and citations piles with a scalpel — no API keys needed](assets/blotcat-analysis.jpg)
 
 Built-in analysis capabilities that work without external dependencies:
 
