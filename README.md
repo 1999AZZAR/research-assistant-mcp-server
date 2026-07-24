@@ -109,6 +109,8 @@ Built-in analysis capabilities that work without external dependencies:
 
 ### Google Search Tools (10 tools)
 
+![Blotcat fishing for search results and rapidly stamping them into an LRU cache icebox](assets/blotcat-google-cache.jpg)
+
 Web search and content analysis capabilities:
 
 - `google_search` - Search the web using Google Custom Search API
@@ -123,6 +125,8 @@ Web search and content analysis capabilities:
 - `search_trends` - Track and analyze search interest trends over time
 
 ### Wikipedia Tools (10 tools)
+
+![Blotcat rapidly batch-sorting Wikipedia pages into language buckets](assets/blotcat-wikipedia.jpg)
 
 Wikipedia integration for encyclopedic knowledge access:
 
