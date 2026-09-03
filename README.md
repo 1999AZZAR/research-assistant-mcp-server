@@ -1,7 +1,7 @@
 # Research MCP Server
 
 
-> **Part of the [HeLa MCP Ecosystem](https://github.com/1999AZZAR/hela-mcp-ecosystem)** — This server is **HeLa Enzyme (`hela-enzyme`)** — the *Knowledge* component of the HeLa cellular architecture. See the [ecosystem docs](https://github.com/1999AZZAR/hela-mcp-ecosystem) for profiles, workflows, and multi-client setup.
+> **Part of the [HeLa MCP Ecosystem](https://github.com/1999AZZAR/hela-hela-mcp-ecosystem)** — This server is **HeLa Enzyme (`hela-enzyme`)** — the *Knowledge* component of the HeLa cellular architecture. See the [ecosystem docs](https://github.com/1999AZZAR/hela-hela-mcp-ecosystem) for profiles, workflows, and multi-client setup.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
@@ -24,8 +24,8 @@ A Model Context Protocol (MCP) server that combines Google Custom Search and Wik
 1. Clone and install:
 
    ```bash
-   git clone https://github.com/your-repo/research-mcp-server.git
-   cd research-mcp-server
+   git clone https://github.com/your-repo/researcher-mcp.git
+   cd researcher-mcp
    npm install
    ```
 
@@ -42,7 +42,7 @@ A Model Context Protocol (MCP) server that combines Google Custom Search and Wik
    ```json
    {
      "mcpServers": {
-       "research-mcp-server": {
+       "researcher-mcp": {
          "command": "npx",
          "args": ["ts-node", "--esm", "index.ts"],
          "env": {
@@ -63,7 +63,7 @@ This project is a combined and enhanced version of:
 - [**Google-Search-MCP**](https://github.com/1999AZZAR/Google-Search-MCP) - Original Google Custom Search MCP server
 - [**wikipedia-mcp-server**](https://github.com/1999AZZAR/wikipedia-mcp-server) - Original Wikipedia MCP server
 
-The research-mcp-server builds upon these foundations, adding enhanced analysis tools, improved caching, unified configuration, and a comprehensive prompt library while maintaining compatibility with the original MCP specifications.
+The researcher-mcp builds upon these foundations, adding enhanced analysis tools, improved caching, unified configuration, and a comprehensive prompt library while maintaining compatibility with the original MCP specifications.
 
 ## Table of Contents
 
@@ -235,9 +235,9 @@ Create a `.cursor/mcp.json` file in your project or `~/.cursor/mcp.json` in your
 ```json
 {
   "mcpServers": {
-    "research-mcp-server": {
+    "researcher-mcp": {
       "command": "npx",
-      "args": ["ts-node", "--esm", "${workspaceFolder}/research-mcp-server/index.ts"],
+      "args": ["ts-node", "--esm", "${workspaceFolder}/researcher-mcp/index.ts"],
       "env": {
         "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}",
         "GOOGLE_CSE_ID": "${env:GOOGLE_CSE_ID}",
@@ -255,9 +255,9 @@ Create a `.cursor/mcp.json` file in your project or `~/.cursor/mcp.json` in your
 ```json
 {
   "mcpServers": {
-    "research-mcp-server": {
+    "researcher-mcp": {
       "command": "node",
-      "args": ["${workspaceFolder}/research-mcp-server/dist/research-server.js"],
+      "args": ["${workspaceFolder}/researcher-mcp/dist/research-server.js"],
       "env": {
         "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}",
         "GOOGLE_CSE_ID": "${env:GOOGLE_CSE_ID}",
@@ -270,7 +270,7 @@ Create a `.cursor/mcp.json` file in your project or `~/.cursor/mcp.json` in your
 }
 ```
 
-For global configuration (`~/.cursor/mcp.json`), replace `${workspaceFolder}` with the full path to your research-mcp-server directory.
+For global configuration (`~/.cursor/mcp.json`), replace `${workspaceFolder}` with the full path to your researcher-mcp directory.
 
 **Note**: After building with `npm run build`, the server will be available at `dist/index.js` for production use.
 
@@ -283,7 +283,7 @@ For global configuration (`~/.cursor/mcp.json`), replace `${workspaceFolder}` wi
 | `WIKIPEDIA_CACHE_MAX`        | Maximum Wikipedia cache entries | `100`                 | No        |
 | `WIKIPEDIA_CACHE_TTL`        | Wikipedia cache TTL (ms)        | `300000`              | No        |
 | `WIKIPEDIA_DEFAULT_LANGUAGE` | Default Wikipedia language      | `en`                  | No        |
-| `SERVER_NAME`                | Server name for identification  | `research-mcp-server` | No        |
+| `SERVER_NAME`                | Server name for identification  | `researcher-mcp` | No        |
 
 *Google Search is optional - the server works with Wikipedia-only functionality
 
@@ -461,8 +461,8 @@ The Research MCP Server implements error handling strategies to ensure reliable 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/research-mcp-server.git
-cd research-mcp-server
+git clone https://github.com/your-repo/researcher-mcp.git
+cd researcher-mcp
 
 # Install dependencies
 npm install
