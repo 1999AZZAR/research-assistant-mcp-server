@@ -110,7 +110,7 @@ Built-in analysis capabilities that work without external dependencies:
 - `archive_org_search` - Search archived web pages on Archive.org (Wayback Machine)
 - `data_export` - Export research data in various formats (JSON, CSV, Markdown)
 
-### Google Search Tools (10 tools)
+### Google Search Tools (11 tools)
 
 ![Blotcat fishing for search results and rapidly stamping them into an LRU cache icebox](assets/blotcat-google-cache.jpg)
 
