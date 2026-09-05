@@ -541,21 +541,52 @@ axiosRetry(axios, {
   retryCondition: axiosRetry.isNetworkOrIdempotentRequestError
 });
 
-// Configuration - reads from environment variables
+// Configuration - reads from environment variables.
+// RESEARCHER_* overrides take precedence; legacy names kept as fallback.
 const config = {
   google: {
     apiKey: process.env.GOOGLE_API_KEY,
     cseId: process.env.GOOGLE_CSE_ID,
+    cacheTtlMs: parseInt(process.env.RESEARCHER_GOOGLE_CACHE_TTL_MS || '1800000'), // 30 min
   },
   wikipedia: {
     cacheMax: parseInt(process.env.WIKIPEDIA_CACHE_MAX || '100'),
     cacheTtl: parseInt(process.env.WIKIPEDIA_CACHE_TTL || '300000'),
-    defaultLang: process.env.WIKIPEDIA_DEFAULT_LANGUAGE || 'en',
+    defaultLang: process.env.RESEARCHER_DEFAULT_LANG || process.env.WIKIPEDIA_DEFAULT_LANGUAGE || 'en',
   },
   server: {
-    name: process.env.SERVER_NAME || 'research-mcp-server',
+    name: process.env.SERVER_NAME || 'hela-enzyme',
   },
+  userAgent: process.env.RESEARCHER_USER_AGENT || 'hela-enzyme/1.0 (researcher-mcp; +https://github.com/1999AZZAR/researcher-mcp)',
 };
+
+// Shared helpers: caps, dedup, bounded parallelism, quota detection.
+const MAX_RESULTS = 20;
+function clampInt(v: unknown, def: number, min = 1, max = MAX_RESULTS): number {
+  const n = typeof v === 'number' ? Math.floor(v) : parseInt(String(v ?? ''), 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(Math.max(n, min), max);
+}
+function normalizeTitle(t: unknown): string {
+  return String(t || '').toLowerCase().replace(/[_–—]/g, ' ').replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
+}
+async function mapAll<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+function isQuotaError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const status = (err as any)?.response?.status ?? (err as any)?.status;
+  return status === 429 || /quota|rate.?limit|429|daily limit/i.test(msg);
+}
 
 // Initialize caches
 const wikiCache = new LRUCache<string, any>({
@@ -788,6 +819,19 @@ const tools = [
         depth: { type: 'string', enum: ['quick', 'standard', 'deep'], description: 'Research depth level', default: 'standard' },
       },
       required: ['researchTopic'],
+    },
+  },
+  {
+    name: 'research_brief',
+    description: 'One-call research brief: fans out to Google + Wikipedia in parallel, dedups cross-source overlap, ranks exact matches first. Replaces chaining google_search + wikipedia_search manually.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Research query' },
+        num: { type: 'number', description: 'Results per source (1-10)', minimum: 1, maximum: 10, default: 5 },
+        lang: { type: 'string', description: 'Wikipedia language (e.g. en, id)', default: 'en' },
+      },
+      required: ['query'],
     },
   },
   {
@@ -1139,7 +1183,7 @@ export default class ResearchMCPServer {
 
     this.googleCache = new LRUCache<string, any>({
       max: 500,
-      ttl: 1000 * 60 * 30, // 30 minutes
+      ttl: config.google.cacheTtlMs,
     });
 
     this.wikipediaCache = new LRUCache<string, any>({
@@ -1191,7 +1235,7 @@ export default class ResearchMCPServer {
             srlimit: limit,
             srprop: 'title|snippet|timestamp',
           },
-          timeout: 10000,
+          headers: { 'User-Agent': config.userAgent },
         });
         result = response.data;
         this.wikipediaCache.set(cacheKey, result);
@@ -1214,7 +1258,7 @@ export default class ResearchMCPServer {
             exsectionformat: 'plain',
             rvprop: 'content',
           },
-          timeout: 10000,
+          headers: { 'User-Agent': config.userAgent },
         });
         result = response.data;
         this.wikipediaCache.set(cacheKey, result);
@@ -1237,7 +1281,7 @@ export default class ResearchMCPServer {
             exsectionformat: 'plain',
             rvprop: 'content',
           },
-          timeout: 10000,
+          headers: { 'User-Agent': config.userAgent },
         });
         result = response.data;
         this.wikipediaCache.set(cacheKey, result);
@@ -1343,12 +1387,12 @@ export default class ResearchMCPServer {
 
   private async extractUrlMetadata(url: string): Promise<any> {
     try {
-      const response = await axios.head(url, { timeout: 5000 });
+      const response = await axios.head(url, { timeout: 5000, headers: { 'User-Agent': config.userAgent } });
       const contentType = response.headers['content-type'] || 'unknown';
 
       // Try to get more metadata if it's HTML
       if (contentType.includes('text/html')) {
-        const fullResponse = await axios.get(url, { timeout: 5000 });
+        const fullResponse = await axios.get(url, { timeout: 5000, headers: { 'User-Agent': config.userAgent } });
         const $ = cheerio.load(fullResponse.data);
 
         return {
@@ -8797,7 +8841,8 @@ Develop and execute a strategic research networking approach to build valuable c
               };
             }
 
-            const { q, num = 5 } = args as any;
+            const { q } = args as any;
+            const num = clampInt((args as any).num, 5, 1, 10);
             const cacheKey = `google:${q}:${num}`;
             let data = googleCache.get(cacheKey);
             if (!data) {
@@ -8814,6 +8859,15 @@ Develop and execute a strategic research networking approach to build valuable c
                 data = response.data;
                 googleCache.set(cacheKey, data);
               } catch (error) {
+                if (isQuotaError(error)) {
+                  try {
+                    const fb = await this.wikipedia.search(q, { limit: num });
+                    const fbItems = fb?.query?.search || [];
+                    return {
+                      content: [{ type: 'text', text: `Google search degraded (quota) — Wikipedia fallback for "${q}" (retrievedAt: ${new Date().toISOString()}):\n\n${fbItems.map((r: any) => `- **${r.title}**: ${(r.snippet || '').replace(/<[^>]+>/g, '')}`).join('\n') || 'No fallback results.'}` }],
+                    };
+                  } catch { /* fall through to hard error */ }
+                }
                 return {
                   content: [{ type: 'text', text: `Google search failed: ${error instanceof Error ? error.message : 'Unknown error'}` }],
                 };
@@ -8830,7 +8884,8 @@ Develop and execute a strategic research networking approach to build valuable c
             };
 
           case 'wikipedia_search':
-            const { query, limit = 5 } = args as any;
+            const { query } = args as any;
+            const limit = clampInt((args as any).limit, 5, 1, 10);
             const wikiCacheKey = `wiki:search:${config.wikipedia.defaultLang}:${query}`;
             let wikiData = wikiCache.get(wikiCacheKey);
             if (!wikiData) {
@@ -8845,7 +8900,7 @@ Develop and execute a strategic research networking approach to build valuable c
                     srlimit: limit,
                     srprop: 'title|snippet',
                   },
-                  timeout: 10000,
+                  headers: { 'User-Agent': config.userAgent },
                 });
                 wikiData = response.data;
                 wikiCache.set(wikiCacheKey, wikiData);
@@ -8880,7 +8935,7 @@ Develop and execute a strategic research networking approach to build valuable c
                     prop: 'text',
                     disableeditsection: '1',
                   },
-                  timeout: 10000,
+                  headers: { 'User-Agent': config.userAgent },
                 });
                 pageData = response.data;
                 wikiCache.set(pageCacheKey, pageData);
@@ -8910,7 +8965,7 @@ Develop and execute a strategic research networking approach to build valuable c
             try {
               const response = await axios.get(url, {
                 timeout: 10000,
-                headers: { 'User-Agent': 'Mozilla/5.0' },
+                headers: { 'User-Agent': config.userAgent },
               });
 
               const $ = cheerio.load(response.data);
@@ -8953,12 +9008,12 @@ Develop and execute a strategic research networking approach to build valuable c
                 content: [{ type: 'text', text: 'Google Search not configured. Set GOOGLE_API_KEY and GOOGLE_CSE_ID environment variables.' }],
               };
             }
-            const { queries: analyticsQueries, timeRange = 'month', maxResults: analyticsMax = 3 } = args as any;
+            const { queries: analyticsQueries, timeRange = 'month', maxResults: analyticsMaxRaw = 3 } = args as any;
+            const analyticsMax = clampInt(analyticsMaxRaw, 3, 1, 5);
             try {
-              const analyticsResults = [];
-              for (const query of analyticsQueries.slice(0, 5)) {
+              const analyticsResults = await mapAll(analyticsQueries.slice(0, 5), 3, async (query: string) => {
                 const result = await this.googleSearch.search({ q: query, num: analyticsMax });
-                analyticsResults.push({
+                return {
                   query,
                   resultsCount: result.items?.length || 0,
                   topDomains: result.items?.slice(0, analyticsMax).map((item: any) => {
@@ -8968,8 +9023,8 @@ Develop and execute a strategic research networking approach to build valuable c
                       return 'unknown';
                     }
                   }) || []
-                });
-              }
+                };
+              });
 
               return {
                 content: [{
@@ -8991,7 +9046,8 @@ Develop and execute a strategic research networking approach to build valuable c
                 content: [{ type: 'text', text: 'Google Search not configured. Set GOOGLE_API_KEY and GOOGLE_CSE_ID environment variables.' }],
               };
             }
-            const { query: multiQuery, sites: multiSites, maxResults: multiMax = 3, fileType: multiFileType } = args as any;
+            const { query: multiQuery, sites: multiSites, maxResults: multiMaxRaw = 3, fileType: multiFileType } = args as any;
+            const multiMax = clampInt(multiMaxRaw, 3, 1, 5);
             try {
               const siteSearch = multiSites.join(' OR site:');
               const result = await this.googleSearch.search({
@@ -9021,7 +9077,8 @@ Develop and execute a strategic research networking approach to build valuable c
                 content: [{ type: 'text', text: 'Google Search not configured. Set GOOGLE_API_KEY and GOOGLE_CSE_ID environment variables.' }],
               };
             }
-            const { query: academicQuery, fileType: academicFileType, dateRange: academicDateRange, sites: academicSites, maxResults: academicMax = 5 } = args as any;
+            const { query: academicQuery, fileType: academicFileType, dateRange: academicDateRange, sites: academicSites, maxResults: academicMaxRaw = 5 } = args as any;
+            const academicMax = clampInt(academicMaxRaw, 5, 1, 10);
             try {
               const siteSearch = academicSites.join(' OR site:');
               const results = await this.googleSearch.search({
@@ -9051,7 +9108,8 @@ Develop and execute a strategic research networking approach to build valuable c
                 content: [{ type: 'text', text: 'Google Search not configured. Set GOOGLE_API_KEY and GOOGLE_CSE_ID environment variables.' }],
               };
             }
-            const { topic, sources = [], language = 'en', country = 'us', maxResults: newsMax = 5, dateRestrict: newsDate = 'd7' } = args as any;
+            const { topic, sources = [], language = 'en', country = 'us', maxResults: newsMaxRaw = 5, dateRestrict: newsDate = 'd7' } = args as any;
+            const newsMax = clampInt(newsMaxRaw, 5, 1, 10);
             try {
               const newsSites = sources.length > 0 ? sources : ['bbc.com', 'cnn.com', 'reuters.com', 'apnews.com', 'nytimes.com'];
               const siteSearch = newsSites.join(' OR site:');
@@ -9078,14 +9136,14 @@ Develop and execute a strategic research networking approach to build valuable c
             };
 
           case 'content_summarizer':
-            const { urls, maxLength = 200 } = args as any;
+            const { urls, maxLength: maxLengthRaw = 200 } = args as any;
+            const maxLength = clampInt(maxLengthRaw, 200, 50, 2000);
             try {
-              const summaries = [];
-              for (const url of urls.slice(0, 5)) {
+              const summaries = await mapAll(urls.slice(0, 5), 3, async (url: string) => {
                 try {
                   const response = await axios.get(url, {
                     timeout: 8000,
-                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                    headers: { 'User-Agent': config.userAgent },
                   });
                   const $ = cheerio.load(response.data);
                   $('script, style, nav, header, footer, aside, .ad, .advertisement').remove();
@@ -9094,11 +9152,11 @@ Develop and execute a strategic research networking approach to build valuable c
                   let content = $('body').text().trim();
                   content = content.replace(/\s+/g, ' ').substring(0, maxLength * 2);
 
-                  summaries.push({ url, title, summary: content.substring(0, maxLength) + '...' });
+                  return { url, title, summary: content.substring(0, maxLength) + '...' };
                 } catch (error) {
-                  summaries.push({ url, error: 'Failed to extract content' });
+                  return { url, error: 'Failed to extract content' };
                 }
-              }
+              });
 
               return {
                 content: [{
@@ -9158,14 +9216,14 @@ Develop and execute a strategic research networking approach to build valuable c
                 `${researchTopic} analysis`,
               ];
 
-              const results = [];
-              for (const query of queries.slice(0, 3)) {
-                const searchResult = await this.googleSearch.search({ q: query, num: 2 });
-                results.push({
-                  query,
-                  results: searchResult.items?.slice(0, 2) || [],
-                });
-              }
+              const results = await mapAll(queries.slice(0, 3), 3, async (query) => {
+                try {
+                  const searchResult = await this.googleSearch.search({ q: query, num: 2 });
+                  return { query, results: searchResult.items?.slice(0, 2) || [] };
+                } catch (e) {
+                  return { query, results: [], error: e instanceof Error ? e.message : String(e) };
+                }
+              });
 
               return {
                 content: [{
@@ -9183,20 +9241,73 @@ Develop and execute a strategic research networking approach to build valuable c
               };
             };
 
+          case 'research_brief': {
+            const { query: briefQuery, num: briefNum = 5, lang: briefLang = 'en' } = args as any;
+            if (typeof briefQuery !== 'string' || !briefQuery.trim()) {
+              return { content: [{ type: 'text', text: 'research_brief requires a non-empty query.' }] };
+            }
+            const n = clampInt(briefNum, 5, 1, 10);
+            const retrievedAt = new Date().toISOString();
+            const norm = normalizeTitle(briefQuery);
+            const [g, w] = await Promise.allSettled([
+              (async () => {
+                if (!config.google.apiKey || !config.google.cseId) throw new Error('Google not configured');
+                return this.googleSearch.search({ q: briefQuery, num: n });
+              })(),
+              this.wikipedia.search(briefQuery, { lang: briefLang, limit: n }),
+            ]);
+            const googleItems = g.status === 'fulfilled' ? (g.value.items || []) : [];
+            const googleError = g.status === 'rejected' ? String(g.reason?.message || g.reason) : null;
+            const wikiItems = w.status === 'fulfilled' ? (w.value?.query?.search || []) : [];
+            const wikiError = w.status === 'rejected' ? String(w.reason?.message || w.reason) : null;
+            const seen = new Set<string>();
+            const ranked: Array<{ source: string; title: string; detail: string; url?: string; exact: boolean }> = [];
+            for (const r of wikiItems) {
+              const key = normalizeTitle(r.title);
+              if (key && seen.has(key)) continue;
+              seen.add(key);
+              ranked.push({
+                source: 'wikipedia', title: r.title,
+                detail: (r.snippet || '').replace(/<[^>]+>/g, ''),
+                url: `https://${briefLang}.wikipedia.org/wiki/${encodeURIComponent(String(r.title).replace(/ /g, '_'))}`,
+                exact: key === norm,
+              });
+            }
+            for (const it of googleItems) {
+              const key = normalizeTitle(it.title);
+              if (key && seen.has(key)) continue;
+              seen.add(key);
+              ranked.push({ source: 'google', title: it.title, detail: it.snippet || '', url: it.link, exact: key === norm });
+            }
+            ranked.sort((a, b) => Number(b.exact) - Number(a.exact));
+            const lines = ranked.slice(0, n * 2).map((r, i) =>
+              `${i + 1}. [${r.source}${r.exact ? ' · exact' : ''}] **${r.title}**${r.url ? `\n   ${r.url}` : ''}${r.detail ? `\n   ${r.detail.slice(0, 280)}` : ''}`
+            );
+            const flags = [
+              googleError ? `google: ${isQuotaError(googleError) ? 'degraded (quota)' : 'error'} — ${googleError.slice(0, 120)}` : null,
+              wikiError ? `wikipedia: error — ${wikiError.slice(0, 120)}` : null,
+            ].filter(Boolean);
+            return {
+              content: [{
+                type: 'text',
+                text: `Research brief for "${briefQuery}" (retrievedAt: ${retrievedAt}${flags.length ? `; ${flags.join('; ')}` : ''}):\n\n${lines.join('\n\n') || 'No results from any source.'}`,
+              }],
+            };
+          }
+
           case 'search_trends':
             const { topics, timeframe = '6M' } = args as any;
             try {
               // Note: This is a simplified version since we don't have access to Google Trends API
               // In a real implementation, this would use Google Trends API
-              const trendsResults = [];
-              for (const topic of topics.slice(0, 3)) {
+              const trendsResults = await mapAll(topics.slice(0, 3), 3, async (topic: string) => {
                 const searchResult = await this.googleSearch.search({
                   q: `${topic} trend OR trending`,
                   dateRestrict: 'm1', // Last month
                   num: 3,
                 });
 
-                trendsResults.push({
+                return {
                   topic,
                   timeframe,
                   recentActivity: searchResult.items?.length || 0,
@@ -9205,8 +9316,8 @@ Develop and execute a strategic research networking approach to build valuable c
                     source: item.displayLink,
                     date: item.snippet.match(/\d{1,2} \w+ \d{4}/)?.[0] || 'Recent',
                   })) || [],
-                });
-              }
+                };
+              });
 
               return {
                 content: [{
@@ -9262,7 +9373,7 @@ Develop and execute a strategic research networking approach to build valuable c
                   explaintext: '1',
                   exsectionformat: 'plain'
                 },
-                timeout: 10000,
+                headers: { 'User-Agent': config.userAgent },
               });
 
               const data = response.data;
@@ -9297,7 +9408,7 @@ Develop and execute a strategic research networking approach to build valuable c
                   rnlimit: '1',
                   rnnamespace: '0'
                 },
-                timeout: 10000,
+                headers: { 'User-Agent': config.userAgent },
               });
 
               const randomPage = response.data?.query?.random?.[0];
@@ -9328,7 +9439,7 @@ Develop and execute a strategic research networking approach to build valuable c
                   titles: langTitle,
                   lllimit: 'max'
                 },
-                timeout: 10000,
+                headers: { 'User-Agent': config.userAgent },
               });
 
               const data = response.data;
@@ -9441,7 +9552,7 @@ Develop and execute a strategic research networking approach to build valuable c
                   gslimit: nearbyLimit,
                   gsprop: 'type|name|country|region|globe'
                 },
-                timeout: 10000,
+                headers: { 'User-Agent': config.userAgent },
               });
 
               const places = response.data?.query?.geosearch || [];
@@ -9480,7 +9591,7 @@ Develop and execute a strategic research networking approach to build valuable c
                   cmlimit: catLimit,
                   cmprop: 'title|type|ids'
                 },
-                timeout: 10000,
+                headers: { 'User-Agent': config.userAgent },
               });
 
               const members = response.data?.query?.categorymembers || [];

@@ -302,10 +302,18 @@ export class WikipediaExtendedFeatures {
   } = {}): Promise<any> {
     const { lang = 'en', date = new Date().toISOString().split('T')[0].replace(/-/g, '/') } = options;
     
-    // Use Wikipedia's pageview API for trending content
-    const response = await fetch(
-      `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/${lang}.wikipedia/all-access/${date}`
-    );
+    // Use Wikipedia's pageview API for trending content (10s abort timeout)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(
+        `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/${lang}.wikipedia/all-access/${date}`,
+        { signal: controller.signal, headers: { 'User-Agent': 'hela-enzyme/1.0 (researcher-mcp)' } }
+      );
+      return response.json();
+    } finally {
+      clearTimeout(timeout);
+    }
     
     return response.json();
   }

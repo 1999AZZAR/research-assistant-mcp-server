@@ -283,7 +283,10 @@ For global configuration (`~/.cursor/mcp.json`), replace `${workspaceFolder}` wi
 | `WIKIPEDIA_CACHE_MAX`        | Maximum Wikipedia cache entries | `100`                 | No        |
 | `WIKIPEDIA_CACHE_TTL`        | Wikipedia cache TTL (ms)        | `300000`              | No        |
 | `WIKIPEDIA_DEFAULT_LANGUAGE` | Default Wikipedia language      | `en`                  | No        |
-| `SERVER_NAME`                | Server name for identification  | `researcher-mcp` | No        |
+| `SERVER_NAME`                | Server name for identification  | `hela-enzyme` | No        |
+| `RESEARCHER_GOOGLE_CACHE_TTL_MS` | Google cache TTL (ms)     | `1800000`               | No        |
+| `RESEARCHER_DEFAULT_LANG`        | Default Wikipedia language (overrides `WIKIPEDIA_DEFAULT_LANGUAGE`) | `en` | No |
+| `RESEARCHER_USER_AGENT`          | HTTP User-Agent for fetches | `hela-enzyme/1.0 (researcher-mcp; …)` | No |
 
 *Google Search is optional - the server works with Wikipedia-only functionality
 
@@ -350,6 +353,7 @@ The server provides the following comprehensive research tools:
 - `fact_checker` - Verify claims by searching for fact-checking sources
 - `research_assistant` - Comprehensive research assistant with multi-query analysis
 - `search_trends` - Track and analyze search interest trends over time
+- `research_brief` - One-call brief: parallel Google + Wikipedia fan-out, cross-source dedup, exact-match ranking, freshness stamps (replaces manual chaining)
 
 ### Wikipedia Tools (10 total)
 
