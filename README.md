@@ -1,7 +1,7 @@
 # Research MCP Server
 
 
-> **Part of the [HeLa MCP Ecosystem](https://github.com/1999AZZAR/hela-hela-mcp-ecosystem)** — This server is **HeLa Enzyme (`hela-enzyme`)** — the *Knowledge* component of the HeLa cellular architecture. See the [ecosystem docs](https://github.com/1999AZZAR/hela-hela-mcp-ecosystem) for profiles, workflows, and multi-client setup.
+> **Part of the [HeLa MCP Ecosystem](https://github.com/1999AZZAR/hela-mcp-ecosystem)** — This server is **HeLa Enzyme (`hela-enzyme`)** — the *Knowledge* component of the HeLa cellular architecture. See the [ecosystem docs](https://github.com/1999AZZAR/hela-mcp-ecosystem) for profiles, workflows, and multi-client setup.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
